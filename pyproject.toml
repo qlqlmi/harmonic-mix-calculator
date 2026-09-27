@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "harmonic-mix"
+version = "0.1.0"
+description = "Check harmonic key compatibility between tracks after BPM-matching them on a vari-speed turntable"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+authors = [
+    { name = "qlqlmi" }
+]
+keywords = ["dj", "harmonic-mixing", "camelot-wheel", "turntable", "music"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+harmonic-mix = "harmonic_mix.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
