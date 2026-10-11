@@ -5,7 +5,7 @@ the pitch shift caused by BPM-matching them on a true vari-speed turntable
 (e.g. a Technics SL-1200), where pitch and tempo are coupled — there's no
 keylock/master-tempo, so speeding a record up also raises its pitch.
 
-## Why this matters
+## What it do
 
 Two tracks that look compatible on paper (e.g. both 8A on the Camelot wheel)
 can stop being compatible once you pitch one to match the other's tempo,
