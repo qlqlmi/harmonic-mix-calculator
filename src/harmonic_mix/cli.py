@@ -57,12 +57,14 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
 
-    track_a = Track(args.name_a, args.bpm_a, args.key_a)
-    track_b = Track(args.name_b, args.bpm_b, args.key_b)
-
-    result = check_harmonic_mix(
-        track_a, track_b, target_bpm=args.target_bpm, pitch_range_pct=args.pitch_range
-    )
+    try:
+        track_a = Track(args.name_a, args.bpm_a, args.key_a)
+        track_b = Track(args.name_b, args.bpm_b, args.key_b)
+        result = check_harmonic_mix(
+            track_a, track_b, target_bpm=args.target_bpm, pitch_range_pct=args.pitch_range
+        )
+    except ValueError as error:
+        parser.error(str(error))
 
     if args.json:
         print(json.dumps(result, indent=2))

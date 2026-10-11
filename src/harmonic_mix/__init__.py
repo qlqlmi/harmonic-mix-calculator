@@ -16,7 +16,7 @@ Then checks Camelot-wheel compatibility between the two *resulting* keys.
 
 import math
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 __version__ = "0.1.0"
 
@@ -64,6 +64,26 @@ _MAJOR_INV = {v: k for k, v in CAMELOT_MAJOR.items()}
 _MINOR_INV = {v: k for k, v in CAMELOT_MINOR.items()}
 
 
+def _parse_camelot_code(code: str) -> Tuple[int, str]:
+    normalized = code.strip().upper()
+    if (
+        len(normalized) < 2
+        or normalized[-1] not in ("A", "B")
+        or not normalized[:-1].isdigit()
+    ):
+        raise ValueError("Camelot code must be a number from 1 to 12 followed by A or B")
+
+    number = int(normalized[:-1])
+    if not 1 <= number <= 12:
+        raise ValueError("Camelot number must be between 1 and 12")
+    return number, normalized[-1]
+
+
+def _validate_bpm(value: float, name: str) -> None:
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be a finite positive number")
+
+
 @dataclass
 class Key:
     tonic: str      # e.g. "A", "Bb", "F#"
@@ -102,16 +122,12 @@ class Key:
 
 def key_from_camelot(code: str) -> Key:
     """e.g. '8A' -> Key('A', 'minor'), '5B' -> Key('C', 'major')"""
-    code = code.strip().upper()
-    number = int(code[:-1])
-    letter = code[-1]
+    number, letter = _parse_camelot_code(code)
     if letter == "B":
         pc = _MAJOR_INV[number]
         return Key(PC_TO_NOTE_SHARP[pc], "major")
-    elif letter == "A":
-        pc = _MINOR_INV[number]
-        return Key(PC_TO_NOTE_SHARP[pc], "minor")
-    raise ValueError("Camelot code must end in A or B")
+    pc = _MINOR_INV[number]
+    return Key(PC_TO_NOTE_SHARP[pc], "minor")
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +135,11 @@ def key_from_camelot(code: str) -> Key:
 # ---------------------------------------------------------------------------
 
 def camelot_compatible(code_a: str, code_b: str) -> Tuple[bool, str]:
-    if code_a == code_b:
-        return True, "identical key"
+    num_a, let_a = _parse_camelot_code(code_a)
+    num_b, let_b = _parse_camelot_code(code_b)
 
-    num_a, let_a = int(code_a[:-1]), code_a[-1]
-    num_b, let_b = int(code_b[:-1]), code_b[-1]
+    if (num_a, let_a) == (num_b, let_b):
+        return True, "identical key"
 
     if let_a == let_b and (num_a % 12) + 1 == num_b:
         return True, "adjacent (+1) on wheel, same mode"
@@ -140,10 +156,14 @@ def camelot_compatible(code_a: str, code_b: str) -> Tuple[bool, str]:
 # ---------------------------------------------------------------------------
 
 def pitch_percent_needed(original_bpm: float, target_bpm: float) -> float:
+    _validate_bpm(original_bpm, "original BPM")
+    _validate_bpm(target_bpm, "target BPM")
     return (target_bpm / original_bpm - 1.0) * 100.0
 
 
 def semitone_shift(original_bpm: float, target_bpm: float) -> float:
+    _validate_bpm(original_bpm, "original BPM")
+    _validate_bpm(target_bpm, "target BPM")
     return 12.0 * math.log2(target_bpm / original_bpm)
 
 
@@ -152,6 +172,9 @@ class Track:
     name: str
     bpm: float
     key: Key
+
+    def __post_init__(self):
+        _validate_bpm(self.bpm, "track BPM")
 
 
 @dataclass
@@ -164,6 +187,8 @@ class MixResult:
 
 
 def pitch_track_to_bpm(track: Track, target_bpm: float, pitch_range_pct: float = 8.0) -> MixResult:
+    if not math.isfinite(pitch_range_pct) or pitch_range_pct < 0:
+        raise ValueError("pitch range must be a finite non-negative number")
     pct = pitch_percent_needed(track.bpm, target_bpm)
     shift = semitone_shift(track.bpm, target_bpm)
     new_key, drift = track.key.transpose(shift)
@@ -181,7 +206,7 @@ def check_harmonic_mix(
     track_b: Track,
     target_bpm: Optional[float] = None,
     pitch_range_pct: float = 8.0,
-) -> dict:
+) -> Dict[str, Any]:
     """
     If target_bpm is None, matches B's tempo to A (A stays at native pitch).
     Pass target_bpm explicitly to pitch both tracks to a common tempo.

@@ -1,6 +1,7 @@
 import math
 
 import pytest
+from harmonic_mix.cli import main as cli_main
 
 from harmonic_mix import (
     Key,
@@ -9,6 +10,7 @@ from harmonic_mix import (
     check_harmonic_mix,
     key_from_camelot,
     pitch_percent_needed,
+    pitch_track_to_bpm,
     semitone_shift,
 )
 
@@ -17,6 +19,12 @@ def test_key_camelot_roundtrip():
     for code in ["1A", "8A", "12A", "1B", "8B", "12B"]:
         key = key_from_camelot(code)
         assert key.camelot() == code
+
+
+@pytest.mark.parametrize("code", ["", "8C", "0A", "13A", "xA"])
+def test_key_from_invalid_camelot_code(code):
+    with pytest.raises(ValueError):
+        key_from_camelot(code)
 
 
 def test_known_camelot_values():
@@ -41,6 +49,16 @@ def test_semitone_shift_matches_formula():
     assert shift == pytest.approx(12 * math.log2(127.14 / 120))
 
 
+@pytest.mark.parametrize("bpm", [0, -120, float("nan"), float("inf")])
+def test_pitch_calculations_reject_invalid_bpm(bpm):
+    with pytest.raises(ValueError):
+        pitch_percent_needed(bpm, 120)
+    with pytest.raises(ValueError):
+        semitone_shift(120, bpm)
+    with pytest.raises(ValueError):
+        Track("Invalid", bpm, Key("A", "minor"))
+
+
 def test_transpose_no_shift_keeps_key():
     key = Key("A", "minor")
     new_key, drift = key.transpose(0)
@@ -57,13 +75,23 @@ def test_transpose_whole_semitone_up():
 
 def test_transpose_wraps_around_octave():
     key = Key("B", "major")
-    new_key, drift = key.transpose(1.0)
+    new_key, _ = key.transpose(1.0)
     assert new_key.tonic == "C"
 
 
 def test_camelot_compatible_identical():
     ok, _ = camelot_compatible("8A", "8A")
     assert ok
+
+
+def test_camelot_compatible_normalizes_case_and_whitespace():
+    assert camelot_compatible(" 8a ", "8A") == (True, "identical key")
+
+
+@pytest.mark.parametrize("code", ["0A", "13A", "8C", "xA"])
+def test_camelot_compatible_rejects_invalid_code_even_when_equal(code):
+    with pytest.raises(ValueError):
+        camelot_compatible(code, code)
 
 
 def test_camelot_compatible_relative_major_minor():
@@ -85,7 +113,7 @@ def test_camelot_compatible_wraps_at_12_to_1():
 
 
 def test_camelot_incompatible():
-    ok, reason = camelot_compatible("8A", "3B")
+    ok, _ = camelot_compatible("8A", "3B")
     assert not ok
 
 
@@ -120,3 +148,18 @@ def test_pitch_range_flagging():
     b = Track("B", 140, Key("A", "minor"))
     result = check_harmonic_mix(a, b, pitch_range_pct=8.0)
     assert result["track_b"]["within_deck_range"] is False
+
+
+@pytest.mark.parametrize("pitch_range", [-1, float("nan"), float("inf")])
+def test_pitch_track_rejects_invalid_pitch_range(pitch_range):
+    track = Track("A", 120, Key("A", "minor"))
+    with pytest.raises(ValueError):
+        pitch_track_to_bpm(track, 120, pitch_range)
+
+
+def test_cli_reports_invalid_bpm_as_argument_error(capsys):
+    with pytest.raises(SystemExit) as error:
+        cli_main(["--bpm-a", "0", "--key-a", "8A", "--bpm-b", "120", "--key-b", "8B"])
+
+    assert error.value.code == 2
+    assert "track BPM must be a finite positive number" in capsys.readouterr().err
